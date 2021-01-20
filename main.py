@@ -52,10 +52,29 @@ def read_csv(csvname):
     df = pd.read_csv(csvname, dtype=object, encoding=enc)
     return df
 
+# エラー発生時スクリーンショットを取る＆HTMLを出力
 
-#######
-# ログイン処理の関数
-#######
+
+def save_screen(driver, fname):
+    fname = "error/"+fname + str(int(time.time()))+".jpg"
+    # パスを指定
+    FILENAME = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), fname)
+    # サイズ調整
+    w = driver.execute_script("return document.body.scrollWidth;")
+    h = driver.execute_script("return document.body.scrollHeight;")
+    driver.set_window_size(w, h)
+    driver.save_screenshot(FILENAME)
+
+
+def save_html(driver, fname):
+    fname = "error/" + fname + str(int(time.time())) + ".html"
+    # パスを指定
+    FILENAME = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), fname)
+    html = driver.page_source
+    with open(FILENAME, 'w', encoding='utf-8_sig') as f:
+        f.write(html)
 
 
 def login_action(driver, userid, password):
@@ -87,22 +106,34 @@ def login_action(driver, userid, password):
 
 def get_latest_date(driver, url):
     try:
+        acname = "取得できませんでした"
+        postdata = "取得できませんでした"
         driver.get(url)
         time.sleep(2)
-        # アカウント名を取得
-        acname = "URLが正しくありません"
-        postdata = "URLが正しくありません"
+    except:
+        save_screen(driver, 'notfound')
+        save_html(driver, 'notfound')
+    else:
         try:
+            # アカウント名を取得
             acname = driver.find_element_by_tag_name("h1").text
-        finally:
+            # 最新の投稿をクリック
             driver.find_element_by_css_selector(
                 "article>div:nth-of-type(1)>div:nth-of-type(1)>div:nth-of-type(1)>div:nth-of-type(1)").click()
             time.sleep(1)
-            # リロード
-            driver.refresh()
-            postdata = driver.find_element_by_xpath(
-                "/html/body/div[1]/section/main/div/div/article/div[3]/div[2]/a/time").get_attribute('title')
-            time.sleep(2)
+        except:
+            save_screen(driver, 'accounterror')
+            save_html(driver, 'accounterror')
+        else:
+            try:
+                # リロード
+                driver.refresh()
+                postdata = driver.find_element_by_xpath(
+                    "/html/body/div[1]/section/main/div/div/article/div[3]/div[2]/a/time").get_attribute('title')
+                time.sleep(2)
+            except:
+                save_screen(driver, 'postdateerror')
+                save_html(driver, 'postdateerror')
     finally:
         return [acname, postdata]
 
@@ -128,7 +159,11 @@ def main():
         driver.execute_script(
             'document.querySelector("#react-root > section > main > div > div > div > div > button").click()')
         time.sleep(2)
-
+    except:
+        # エラーを出力
+        save_screen(driver, 'loginerorr')
+        save_html(driver, 'loginerorr')
+    else:
         # 投稿日を取得
         for tg in target_list["取得したいアカウントのプロフィールURL"]:
             result = get_latest_date(driver, tg)
