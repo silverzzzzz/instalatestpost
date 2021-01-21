@@ -104,8 +104,9 @@ def login_action(driver, userid, password):
 # 投稿日取得の関数
 
 
-def get_latest_date(driver, url):
+def get_latest_date(driver, id):
     try:
+        url = "https://www.instagram.com/"+id
         acname = "取得できませんでした"
         postdata = "取得できませんでした"
         driver.get(url)
@@ -135,7 +136,7 @@ def get_latest_date(driver, url):
                 save_screen(driver, 'postdateerror')
                 save_html(driver, 'postdateerror')
     finally:
-        return [acname, postdata]
+        return [acname, postdata, url]
 
 
 def main():
@@ -165,9 +166,9 @@ def main():
         save_html(driver, 'loginerorr')
     else:
         # 投稿日を取得
-        for tg in target_list["取得したいアカウントのプロフィールURL"]:
+        for tg in target_list["日時を取得したいアカウントid"]:
             result = get_latest_date(driver, tg)
-            result_l.append([result[0], result[1], tg])
+            result_l.append([result[0], result[1], result[2]])
     finally:
         # csv出力
         df = pd.DataFrame(result_l, columns=['アカウント名', '最新投稿日', 'プロフィールURL'])
