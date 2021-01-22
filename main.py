@@ -1,6 +1,7 @@
 import os
 from selenium.webdriver import Chrome, ChromeOptions, ActionChains
 import time
+import datetime
 import random
 import logging
 import traceback
@@ -56,7 +57,7 @@ def read_csv(csvname):
 
 
 def save_screen(driver, fname):
-    fname = "error/"+fname + str(int(time.time()))+".jpg"
+    fname = "error/"+fname + str(int(time.time()))+".png"
     # パスを指定
     FILENAME = os.path.join(os.path.dirname(
         os.path.abspath(__file__)), fname)
@@ -129,8 +130,12 @@ def get_latest_date(driver, id):
             try:
                 # リロード
                 driver.refresh()
-                postdata = driver.find_element_by_xpath(
-                    "/html/body/div[1]/section/main/div/div/article/div[3]/div[2]/a/time").get_attribute('title')
+                dt = driver.find_element_by_xpath(
+                    "/html/body/div[1]/section/main/div/div/article/div[3]/div[2]/a/time").get_attribute('datetime')
+                # datetimeに+9時間
+                dt = dt[:10] + " " + dt[11:19]
+                dt = datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+                postdata = str(dt+datetime.timedelta(hours=9))
                 time.sleep(2)
             except:
                 save_screen(driver, 'postdateerror')
@@ -172,7 +177,10 @@ def main():
     finally:
         # csv出力
         df = pd.DataFrame(result_l, columns=['アカウント名', '最新投稿日', 'プロフィールURL'])
-        df.to_csv("result.csv", encoding="utf-8_sig")
+        try:
+            df.to_csv("result.csv", encoding="utf-8_sig")
+        except Exception as e:
+            print(e+"csv書き込み時にエラーが発生しました")
         # ブラウザを開いたまま終了する
         #os.kill(driver.service.process.pid, signal.SIGTERM)
 
