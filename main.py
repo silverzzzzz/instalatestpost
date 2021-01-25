@@ -9,6 +9,8 @@ import sys
 from selenium.webdriver.common.action_chains import ActionChains
 import pandas as pd
 from getenc import getEncode
+from bs4 import BeautifulSoup
+import re
 import signal
 
 # Chromeを起動する関数
@@ -79,69 +81,17 @@ def save_html(driver, fname):
 
 
 def login_action(driver, userid, password):
-    ######
-    # Webサイトを開く
-    ######
-    driver.get("https://www.instagram.com/")
-    time.sleep(2)
-
-    # リダイレクトされた場合
-    cur_url = str(driver.current_url)
-    login_url = "https://www.instagram.com/"
-    print(cur_url)
-    # ログイン画面だったらログイン
-    if cur_url == login_url:
-        # ID,PASSの入力
-        time.sleep(1)
-        logid_area = driver.find_element_by_name('username')
-        logpass_area = driver.find_element_by_name('password')
-        input_text_slowly(logid_area, userid, 0.2, 0.5)
-        input_text_slowly(logpass_area, password, 0.2, 0.5)
-        # ログインボタンクリック
-        time.sleep(3)
-        driver.find_element_by_xpath(
-            '/html/body/div[1]/section/main/article/div[2]/div[1]/div/form/div/div[3]/button/div').click()
-
-# 投稿日取得の関数
-
-
-def get_latest_date(driver, id):
-    try:
-        url = "https://www.instagram.com/"+id
-        acname = "取得できませんでした"
-        postdata = "取得できませんでした"
-        driver.get(url)
-        time.sleep(2)
-    except:
-        save_screen(driver, 'notfound')
-        save_html(driver, 'notfound')
-    else:
-        try:
-            # アカウント名を取得
-            acname = driver.find_element_by_tag_name("h1").text
-            # 最新の投稿をクリック
-            driver.find_element_by_css_selector(
-                "article>div:nth-of-type(1)>div:nth-of-type(1)>div:nth-of-type(1)>div:nth-of-type(1)").click()
-            time.sleep(1)
-        except:
-            save_screen(driver, 'accounterror')
-            save_html(driver, 'accounterror')
-        else:
-            try:
-                # リロード
-                driver.refresh()
-                dt = driver.find_element_by_xpath(
-                    "/html/body/div[1]/section/main/div/div/article/div[3]/div[2]/a/time").get_attribute('datetime')
-                # datetimeに+9時間
-                dt = dt[:10] + " " + dt[11:19]
-                dt = datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
-                postdata = str(dt+datetime.timedelta(hours=9))
-                time.sleep(2)
-            except:
-                save_screen(driver, 'postdateerror')
-                save_html(driver, 'postdateerror')
-    finally:
-        return [acname, postdata, url]
+    # ID,PASSの入力
+    time.sleep(1)
+    logid_area = driver.find_element_by_name('username')
+    logpass_area = driver.find_element_by_name('password')
+    input_text_slowly(logid_area, userid, 0.2, 0.5)
+    input_text_slowly(logpass_area, password, 0.2, 0.5)
+    # ログインボタンクリック
+    time.sleep(1)
+    driver.find_element_by_xpath(
+        '/html/body/div[1]/section/main/div/div/div[1]/div/form/div/div[3]/button').click()
+    time.sleep(3)
 
 
 def main():
@@ -156,33 +106,42 @@ def main():
     elif os.name == 'posix':  # Mac
         driver = set_driver("chromedriver", False)
 
-    # ページにアクセス
-    try:
-        # ログイン処理
-        login_action(driver, login["ログインID"], login["パスワード"])
-        time.sleep(3)
-        # ポップアップを閉じる
-        driver.execute_script(
-            'document.querySelector("#react-root > section > main > div > div > div > div > button").click()')
-        time.sleep(2)
-    except:
-        # エラーを出力
-        save_screen(driver, 'loginerorr')
-        save_html(driver, 'loginerorr')
-    else:
-        # 投稿日を取得
-        for tg in target_list["日時を取得したいアカウントid"]:
-            result = get_latest_date(driver, tg)
-            result_l.append([result[0], result[1], result[2]])
-    finally:
-        # csv出力
-        df = pd.DataFrame(result_l, columns=['アカウント名', '最新投稿日', 'プロフィールURL'])
+    # 投稿日を取得
+    for tg in target_list["日時を取得したいアカウントid"]:
+        url = "https://www.instagram.com/"+tg
+        driver.get(url)
+        time.sleep(1)
+        # ログイン画面だったらログイン
+        if driver.current_url == "https://www.instagram.com/accounts/login/":
+            login_action(driver, login["ログインID"], login["パスワード"])
+            if driver.current_url == "https://www.instagram.com/accounts/login/":
+                save_screen(driver, 'loginerorr')
+                save_html(driver, 'loginerorr')
+                break
+            driver.get("https://www.instagram.com/" + tg)
+            time.sleep(2)
+        source = driver.page_source
+        soup = BeautifulSoup(source, 'lxml')
+        #print(soup.select('body > script')[0].string)
+        # 最新の投稿日
+        unixt = re.search(r'(taken_at_timestamp)\D+\d+',
+                          soup.select('body > script')[0].string)
         try:
-            df.to_csv("result.csv", encoding="utf-8_sig")
-        except Exception as e:
-            print(e+"csv書き込み時にエラーが発生しました")
-        # ブラウザを開いたまま終了する
-        #os.kill(driver.service.process.pid, signal.SIGTERM)
+            # 最新の投稿日
+            latest_time = datetime.datetime.fromtimestamp(
+                int(unixt.group()[-10:]))
+        except:
+            latest_time = "取得できませんでした"
+            save_screen(driver, 'postdateerror')
+            save_html(driver, 'postdateerror')
+        finally:
+            result_l.append([tg, latest_time, url])
+    # csv出力
+    df = pd.DataFrame(result_l, columns=['アカウントId', '最新投稿日', 'プロフィールURL'])
+    try:
+        df.to_csv("result.csv", encoding="utf-8_sig")
+    except Exception as e:
+        print(e + "csv書き込み時にエラーが発生しました")
 
 
 main()
